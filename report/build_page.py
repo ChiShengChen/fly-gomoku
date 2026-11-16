@@ -5,7 +5,7 @@ Kept as a build step rather than a hand-edited file so the page can never drift 
 produced it: re-run runner/run_gomoku.py, re-run this, and every number on the page moves
 together.
 
-    python report/build_page.py          # writes docs/index.html
+    python report/build_page.py          # writes index.html
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = "gomoku_template.html"
-OUT = ROOT / "docs" / "index.html"
+OUT = ROOT / "index.html"
 # (json, window variable) — each becomes a global the template reads
 DATA = [("gomoku_flywire.json", "GOMOKU"), ("fly_parts.json", "FLY"),
         ("circuit_flywire.json", "CIRCUIT"), ("reward_flywire.json", "REWARD"),
@@ -43,7 +43,6 @@ def main() -> int:
         out_txt = out_txt.replace("/*CODE*/", (ROOT / "report" / part).read_text(encoding="utf-8"), 1)
     if "/*CODE*/" in out_txt:
         raise SystemExit(f"{TEMPLATE}: a /*CODE*/ slot was left unfilled")
-    OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(out_txt, encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)}  ({OUT.stat().st_size/1e6:.2f} MB)")
     return 0

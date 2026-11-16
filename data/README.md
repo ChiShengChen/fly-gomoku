@@ -1,6 +1,6 @@
 # Data
 
-Nothing in this folder is needed to **look at** the result — `docs/index.html` and the JSON files
+Nothing in this folder is needed to **look at** the result — `index.html` and the JSON files
 in `report/` are the published run. The connectome is only needed to run it again, and it is
 downloaded rather than stored here.
 

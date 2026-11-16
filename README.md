@@ -7,8 +7,9 @@ and wins.
 repository is the check: run the identical pipeline through a rewired copy of the connectome and
 see whether the real wiring did anything. Here it did not — the shuffled copy plays better.
 
-**Open [`docs/index.html`](docs/index.html) in a browser to see the result**: every game, move by
-move, with both brains lighting up beside the board.
+**Open [`index.html`](index.html) in a browser to see the result**: every game, move by move, with
+both brains lighting up beside the board. The page is self-contained (about 3.5 MB, with the
+recorded simulation embedded) and fetches nothing but its fonts.
 
 ## Result
 
@@ -36,6 +37,11 @@ One run, FlyWire v783, 139,255 neurons, seed 1 (2026-09-13).
   there is no signal a learning rule could act on. The plastic version was therefore built on
   olfaction instead; it learns, does not tell two odours apart, and does no better than its own
   shuffle.
+* **The L1/Mi1 feedback loop is real, and it is not why the signal fades.** The visual signal
+  loses roughly fivefold per stage. Cutting both return arrows of the loop makes L1 respond
+  *less* to light (4.11 % modulation down to 3.48 %, against 3.81 % for a matched random
+  deletion). What is left is the model's own gain: the photoreceptors move L1's membrane by about
+  one millivolt.
 
 [`docs/NOTES.md`](docs/NOTES.md) is the lab notebook behind these numbers, mistakes included.
 
@@ -45,8 +51,9 @@ Nothing is trained. There is no reward, no policy and no search.
 
 1. The board is drawn as a 64×64 image: the fly's stones bright, the opponent's dim.
 2. The image drives the right eye's photoreceptors (R1-6, R7, R8) through their retinal positions.
-3. A leaky integrate-and-fire network of the whole brain runs for 200 ms. The optic lobe uses
-   graded (non-spiking) units; everything else spikes.
+3. A leaky integrate-and-fire network of the whole brain runs for 200 ms, carrying the image
+   through lamina, medulla and lobula. The optic lobe uses graded (non-spiking) units; everything
+   else spikes.
 4. Each LC4 and LPLC2 neuron — lobula cells that report *where* something salient is — votes for
    the board square under its receptive field. The receptive-field centres are derived from the
    wiring, not assumed from where the cell body sits.
@@ -54,12 +61,13 @@ Nothing is trained. There is no reward, no policy and no search.
    and is counted as such.
 
 The shuffled copy keeps every neuron's number of inputs and outputs and rewires who connects to
-whom.
+whom. A plain brightest-region rule, with no neurons at all, is shown the same boards as a second
+baseline.
 
 ## Layout
 
 ```
-docs/index.html            the result page (built; open it directly)
+index.html                 the result page (built; open it directly)
 docs/NOTES.md              lab notes for this experiment
 runner/run_gomoku.py       the experiment: boards, games vs random, head to head
 runner/graph.py            signed connectome loader, retinal projection
@@ -69,7 +77,7 @@ model/lif_torch.py         the network kernel
 model/plasticity.py        dopamine-gated depression rule (conditioning only)
 controls/generators.py     degree-preserving shuffle and other nulls
 report/*.json              the published run's data, one file per page section
-report/build_page.py       template + JSON -> docs/index.html
+report/build_page.py       template + JSON -> index.html
 report/reward_reach.py     how far activity gets towards the mushroom body
 report/circuit_matrix.py   synapse counts between the cell types on the pathway
 data/                      how to obtain the connectome (not stored here)
@@ -99,8 +107,9 @@ game. The dynamics, the synapse signs and the way the stimulus enters are model 
 3D flies, the board and the reaching are animation; the bodies are the
 [NeuroMechFly](https://github.com/NeLy-EPFL/NeuroMechFly) mesh (Apache-2.0).
 
-The task the readout cells are built for is looming detection: LC4 and LPLC2 converge onto the
-giant-fibre escape neurons. A dodging task would test the animal's actual computation. Gomoku
+The task the readout cells are built for is looming detection: LC4 and LPLC2 converge 311 cells
+onto the 2 giant-fibre escape neurons, and in the parent project that pathway answers looming at
+280 Hz while beating its shuffle control. A dodging task would test the animal's actual computation. Gomoku
 tests whether a wiring diagram can be made to look like it is playing, which is easier and means
 less.
 
