@@ -1,0 +1,730 @@
+<title>The Fly Plays Gomoku</title>
+<!-- The artifact host supplies this, but report/gomoku.html is also opened directly, and without
+     it a phone lays the page out at 980px and then shrinks the whole thing to fit. -->
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500&display=swap">
+
+<style>
+:root{
+  --bg:#07090E; --panel:#0C1017; --sunk:#080B11; --line:#1A2230; --hair:#121926;
+  --ink:#E7EDF5; --ink2:#9AA8B9; --muted:#5E6C7E;
+  --fly:#FFAE3C;      /* the fly's stones and the real connectome */
+  --opp:#63758A;      /* the random opponent */
+  --scram:#7FD4E8;    /* the shuffled copy */
+  --hot:#FF4361;      /* where the circuit says to play */
+  --dead:#2C3644;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:15px;line-height:1.55;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 64px;display:flex;flex-direction:column;
+  gap:18px;overflow-x:hidden}
+html,body{max-width:100%;overflow-x:hidden}
+.rig{display:flex;flex-wrap:wrap;gap:5px 20px;align-items:baseline;
+  font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);
+  border-bottom:1px solid var(--line);padding-bottom:10px}
+.rig b{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:700;font-size:11.5px;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--ink)}
+.rig i{font-style:normal;color:var(--ink2)}
+h1{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:700;
+  font-size:clamp(32px,6vw,62px);line-height:1;letter-spacing:-.02em;margin:4px 0 0;
+  text-wrap:balance}
+.dek{max-width:62ch;color:var(--ink2);margin:0;font-size:17px}
+.dek b{color:var(--fly);font-weight:500}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:3px}
+.ph{display:flex;align-items:baseline;gap:4px 10px;padding:10px 15px;flex-wrap:wrap;
+  border-bottom:1px solid var(--hair)}
+.ph h2{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:11.5px;
+  letter-spacing:.16em;text-transform:uppercase;margin:0}
+.ph p{margin:0;font-size:11.5px;color:var(--muted)}
+.ph .sp{flex:1}
+.pb{padding:15px}
+
+.boards{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.boards>div{padding:15px}
+.boards>div+div{border-left:1px solid var(--hair)}
+.bt{display:flex;align-items:baseline;gap:9px;margin:0 0 9px}
+.bt .nm{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:700;font-size:12px;
+  letter-spacing:.18em;text-transform:uppercase}
+.bt .st{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted)}
+canvas{display:block;width:100%;image-rendering:auto}
+
+.tp{display:flex;align-items:center;gap:9px 12px;flex-wrap:wrap;border:1px solid var(--line);
+  background:var(--panel);border-radius:3px;padding:10px 13px}
+button{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:11px;
+  letter-spacing:.14em;text-transform:uppercase;cursor:pointer;background:transparent;
+  color:var(--ink2);border:1px solid var(--line);border-radius:2px;padding:6px 13px}
+button:hover{border-color:var(--fly);color:var(--fly)}
+button:focus-visible{outline:2px solid var(--fly);outline-offset:2px}
+button[aria-pressed="true"]{background:var(--fly);border-color:var(--fly);color:#07090E}
+input[type=range]{flex:1;min-width:140px;accent-color:var(--fly)}
+.tpn{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.key{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)}
+.key i{width:10px;height:10px;border-radius:50%;display:inline-block}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--hair)}
+th:first-child,td:first-child{text-align:left}
+th{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:600;font-size:10.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line)}
+td.n{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.big{font-family:"IBM Plex Mono",monospace;font-size:27px;font-weight:600;line-height:1.1;
+  font-variant-numeric:tabular-nums;margin:0}
+.lbl{font-family:"IBM Plex Sans Condensed",sans-serif;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--muted);margin:0 0 2px}
+
+.cx-lyr{fill:var(--muted);font:600 10.5px "IBM Plex Sans Condensed",sans-serif;
+  letter-spacing:.16em;text-transform:uppercase}
+.cx-lbl{fill:var(--ink2);font:10.5px "IBM Plex Mono",monospace}
+.cx-node{fill:var(--ink2);stroke:var(--bg);stroke-width:1.2;cursor:pointer}
+.cx-node:focus{outline:none;fill:var(--fly)}
+path.cx-exc{stroke:var(--fly);fill:none;opacity:.34}
+path.cx-inh{stroke:var(--scram);fill:none;opacity:.34}
+path.cx-back{stroke-dasharray:4 3}
+path.cx-loop{stroke:var(--hot);opacity:.62}
+#circuit.cx-focus path{opacity:.06}
+#circuit.cx-focus path.cx-hit{opacity:.95}
+.cx-exc-t{color:var(--fly)} .cx-inh-t{color:var(--scram)}
+.note{max-width:68ch;color:var(--ink2);font-size:14.5px}
+.note h3{font-family:"IBM Plex Sans Condensed",sans-serif;font-weight:700;font-size:12.5px;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--ink);margin:22px 0 7px}
+.note p{margin:0 0 11px}
+.note strong{color:var(--ink)}
+footer{border-top:1px solid var(--line);padding-top:14px;font-size:11.5px;color:var(--muted);
+  max-width:78ch}
+footer b{color:var(--ink2);font-weight:500}
+@media (max-width:860px){.boards,.two{grid-template-columns:1fr}
+  .boards>div+div{border-left:none;border-top:1px solid var(--hair)}}
+</style>
+
+<div class="wrap">
+  <div class="rig">
+    <b>Recording</b>
+    <span>connectome <i id="m-ds"></i></span>
+    <span>readout <i id="m-ro"></i></span>
+    <span><i id="m-nr"></i> lobula cells</span>
+    <span>board <i id="m-bd"></i></span>
+  </div>
+
+  <header>
+    <h1>The fly plays gomoku</h1>
+    <p class="dek">The board is drawn as an image, the image reaches the photoreceptors through the
+    retinotopic map, and the move is whichever square the <b>lobula</b> is most active over. The
+    same pipeline runs on a shuffled copy of the connectome. If the copy plays as well, the wiring
+    did nothing — and that is the only question a demo like this can actually settle.</p>
+  </header>
+
+  <section class="panel" style="overflow:hidden">
+    <div class="ph"><h2>Head to head</h2>
+      <p id="h2h-sub">the real connectome against a shuffled copy of itself</p>
+      <span class="sp"></span><p class="tpn" id="h2h-score"></p></div>
+    <div style="position:relative">
+      <canvas id="gl3"></canvas>
+      <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(
+        ellipse 80% 75% at 50% 45%,transparent 45%,rgba(4,6,11,.75) 100%)"></div>
+      <div style="position:absolute;left:14px;top:12px;pointer-events:none">
+        <p class="bt" style="margin:0"><span class="nm" style="color:var(--fly)">Real</span></p>
+        <p class="tpn" style="margin:2px 0 0" id="h3-real"></p>
+        <p class="tpn" style="margin:1px 0 0;opacity:.65" id="h3-real-n"></p>
+      </div>
+      <div style="position:absolute;right:14px;top:12px;pointer-events:none;text-align:right">
+        <p class="bt" style="margin:0;justify-content:flex-end">
+          <span class="nm" style="color:var(--scram)">Shuffled</span></p>
+        <p class="tpn" style="margin:2px 0 0" id="h3-scram"></p>
+        <p class="tpn" style="margin:1px 0 0;opacity:.65" id="h3-scram-n"></p>
+      </div>
+      <p class="tpn" id="h3-note" style="position:absolute;left:0;right:0;bottom:10px;
+        text-align:center;pointer-events:none;margin:0"></p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>Each against a random opponent</h2>
+      <p>twelve games each, move by move</p><span class="sp"></span>
+      <p class="tpn" id="movelbl"></p></div>
+    <div class="boards">
+      <div>
+        <p class="bt"><span class="nm" style="color:var(--fly)">Real connectome</span>
+           <span class="st" id="st-real"></span></p>
+        <canvas id="b-real" height="380"></canvas>
+      </div>
+      <div>
+        <p class="bt"><span class="nm" style="color:var(--scram)">Shuffled</span>
+           <span class="st" id="st-scram"></span></p>
+        <canvas id="b-scram" height="380"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <div class="tp">
+    <button id="play" aria-pressed="true">Pause</button>
+    <input id="scrub" type="range" min="0" value="0" aria-label="move">
+    <span class="tpn" id="gno"></span>
+    <button id="prev">◀ game</button><button id="next">game ▶</button>
+    <button id="heat" aria-pressed="true">Salience</button>
+    <span class="key"><i style="background:var(--fly)"></i>fly</span>
+    <span class="key"><i style="background:var(--opp)"></i>opponent</span>
+    <span class="key"><i style="background:var(--hot)"></i>where the circuit points</span>
+  </div>
+
+  <section class="panel">
+    <div class="ph"><h2>The circuit it runs through</h2>
+      <p>type to type, weighted by measured synapse count</p><span class="sp"></span>
+      <span class="key"><i style="background:var(--fly)"></i>excitatory</span>
+      <span class="key"><i style="background:var(--scram)"></i>inhibitory</span>
+      <span class="key"><i style="background:var(--hot)"></i>feedback onto the lamina</span></div>
+    <div class="pb" style="overflow-x:auto"><div id="circuit" style="min-width:720px"></div>
+      <p style="margin:10px 0 0;font-size:12.5px;color:var(--muted)">Hover a cell type to isolate
+      what it touches. Arrows curving back to the left are feedback; thickness is the signed
+      synapse total between the two populations, so nothing here is a schematic decision. Every
+      connection above 400 synapses is drawn, which is why the two descending neurons on the right
+      hang off almost nothing — LC4 reaches DNp01 across 1,601 synapses against the 120,383 that
+      L1 spends on Mi1, and that thinness is the result, not a missing arrow.</p>
+    </div>
+    <div class="pb" style="border-top:1px solid var(--hair);overflow-x:auto">
+      <p class="lbl">the loops that close back onto the lamina</p>
+      <table><thead><tr><th>forward</th><th>synapses</th><th>return</th><th>synapses</th>
+        <th style="text-align:left">sign of the loop</th></tr></thead>
+        <tbody id="loop-tb"></tbody></table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>Where the reward machinery would be</h2>
+      <p>cells firing per move, by distance from the eye</p></div>
+    <div class="pb" style="overflow-x:auto">
+      <table><thead><tr><th style="text-align:left">population</th>
+        <th>in the volume</th><th>sampled</th><th>real</th><th>shuffled</th></tr></thead>
+        <tbody id="reward-tb"></tbody></table>
+      <p style="margin:12px 0 0;font-size:12.5px;color:var(--muted)">A fly learns by having
+      dopamine rewrite the synapses between its Kenyon cells and their outputs. Across
+      <strong id="rw-moves"></strong> real moves, <strong id="rw-kc"></strong> sampled Kenyon cells
+      fired <strong>zero</strong> times. The reward machinery is not switched off here; the board
+      never reaches it. The shuffled copy does light it up, which is the same finding as everywhere
+      else on this page — scrambling removes the attenuation, so noise arrives where signal could
+      not.</p>
+      <p style="margin:10px 0 0;font-size:12.5px;color:var(--muted)">Two caveats kept in view
+      rather than in a footnote. The medulla row reads <em>n/a</em> because those units are graded
+      and never cross threshold, so a spike record cannot see them at all — a zero there would mean
+      the opposite of what it looks like. And the punishment row rests on a
+      <span style="color:var(--hot)">single sampled cell</span>, which is too few to carry any
+      weight; the Kenyon-cell row, at 1,042 of 5,177, is the one that does.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="ph"><h2>So we gave it plasticity</h2>
+      <p>appetitive conditioning, in the modality the mushroom body actually has</p></div>
+    <div class="pb">
+      <p style="margin:0 0 16px;font-size:13.5px;color:var(--muted);max-width:74ch">A learning rule
+      bolted onto the board would multiply by the zero above. Olfaction is the input that does
+      arrive, so the plastic version runs there: an odour is a combination of glomeruli, the reward
+      is delivered by driving the reward-dopamine cells directly, and afterwards every Kenyon-cell
+      output synapse that fired alongside dopamine is depressed. <strong>The bars are how much each
+      odour's output dropped after training.</strong></p>
+      <div id="cond-bars"></div>
+      <p style="margin:16px 0 0;font-size:12.5px;color:var(--muted);max-width:74ch">The prediction
+      below the bars was written down before the run, not after it.</p>
+    </div>
+    <div class="pb" style="border-top:1px solid var(--hair)">
+      <p id="cond-verdict" style="margin:0;font-size:13.5px;max-width:74ch"></p>
+    </div>
+  </section>
+
+  <div class="two">
+    <section class="panel">
+      <div class="ph"><h2>The neural map</h2><p>receptive-field centres, derived from wiring</p></div>
+      <div class="pb">
+        <canvas id="rf" height="300"></canvas>
+        <p style="margin:10px 0 0;font-size:12.5px;color:var(--muted)">Each dot is one LC4 or LPLC2
+        cell, placed at the weighted mean of its inputs' retinal positions — seeded at the
+        photoreceptors and pushed forward through the wiring, because a lobula cell sits nowhere
+        near the part of the retina it watches. Squares the lobula can reach are lit;
+        <span style="color:var(--hot)" id="rf-cover"></span></p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Did the wiring matter?</h2><p>same boards, both brains</p></div>
+      <div class="pb">
+        <div style="overflow-x:auto"><table><tbody id="tb"></tbody></table></div>
+        <p class="lbl" style="margin:16px 0 6px">where each brain actually played,
+          all games</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><canvas id="h-real" height="150"></canvas>
+            <p class="tpn" style="margin:5px 0 0;color:var(--fly)">real</p></div>
+          <div><canvas id="h-scram" height="150"></canvas>
+            <p class="tpn" style="margin:5px 0 0;color:var(--scram)">shuffled</p></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="note">
+    <h3>The result that needs no interpretation</h3>
+    <p id="h2h-verdict"></p>
+
+    <h3>The circuit, and the loop that costs it</h3>
+    <p>The diagram is drawn from the connectome, not from a textbook figure: each arrow's thickness
+    is the signed synapse total between two cell types and its colour is the sign, so an arrow that
+    looks thin is thin in the animal. Read left to right and it is the path a move takes —
+    photoreceptors, lamina, medulla, lobula, and the two descending neurons that in a real fly would
+    move something.</p>
+    <p>The curves running backwards are the interesting part. <strong>L1 inhibits Mi1 across
+    120,383 synapses and Mi1 excites L1 back across 23,444</strong> — a closed negative loop sitting
+    on the second synapse of vision. An earlier run measured the signal losing about fivefold on the
+    way to the lobula and named this loop as the cause, so the obvious thing to do was delete it.</p>
+    <p><strong>It is not the cause.</strong> Cutting both return arrows makes L1 <em>less</em>
+    responsive to light, not more — 4.11 % modulation down to 3.48 % — while deleting a random set
+    of the same size and sign takes it to 3.81 %. Those edges are net drive into L1, not compression
+    of it. Deleting every unmodulated input instead, so that L1 hears nothing but photoreceptors,
+    buys 4.11 % → 4.66 %: dilution is not the cause either. What is left is the gain of the model
+    itself, and the arithmetic is blunt — the photoreceptors swing 47 Hz of release across 59,050
+    synapses and move L1's membrane about <strong>one millivolt</strong>. The loop is real, drawn
+    from its own synapse counts; the story that was told about it was wrong, and the way that was
+    settled was by cutting it and measuring.</p>
+
+    <h3>The clouds behind them</h3>
+    <p>Each player has its own brain floating behind it — <strong id="cloud-n"></strong> neurons at
+    the coordinates the FlyWire volume gives them, out of 139,255. A cell lights on the move during
+    which it fired, and fades over the next few. This is the same simulation that chose the move,
+    not a separate visualisation: the stone that lands is read out of the cells you can see
+    flickering.</p>
+    <p>Both clouds are the same neurons in the same places. Only the wiring between them differs,
+    and the difference is visible as how much of the brain lights up at all.</p>
+
+    <h3>About the flies</h3>
+    <p>The bodies are real anatomy, not illustration: the mesh is
+    <strong>NeuroMechFly</strong> (NeLy-EPFL, Apache-2.0, Lobato-Rios et al. 2022,
+    <em>Nature Methods</em>), 65 parts assembled from the model's own SDF and reduced from 334,525
+    triangles to 81,866 so a browser can carry it. The legs hang in the model's neutral pose
+    because they are placed by link pose without solving the joint chain — a posture, not a claim.
+    The board, the reaching and the wingbeat are animation. The brains are the real thing; the
+    scene around them is not, and that split is the whole reason this page exists.</p>
+
+    <h3>What this is not</h3>
+    <p>It is not a fly that learned gomoku. There is no learning anywhere in it — the connectome is
+    fixed, there is no reward, no training and no policy. What runs is the wiring diagram with a
+    board painted on its eye, and the move is read out of where the circuit is loudest. Any post
+    claiming a fly was <em>taught</em> a game is describing a reinforcement learner that happens to
+    be shaped like a connectome, and the way to tell the difference is on this page.</p>
+    <p>That claim is measured rather than asserted, and it fails for two independent reasons. The
+    first is in the table above: the mushroom body sits about five synapses from the eye, the signal
+    loses roughly fivefold at each one, and by the time it should arrive there is nothing left —
+    across every move of every game, <strong>not one sampled Kenyon cell fired</strong>. The second
+    would hold even if the signal did arrive: dopamine in a fly works by changing the strength of
+    Kenyon-cell synapses, and the weights here are a fixed anatomical measurement with no rule that
+    could change them. Reward would need a plasticity rule, a signal to drive it, and something to
+    keep the input alive across five stages — three things this does not have, listed so nobody has
+    to guess which of them is missing.</p>
+
+    <h3>The fly cannot reach most of the board</h3>
+    <p>The lobula columnar cells do not tile the visual field evenly, so their receptive-field
+    centres land in only <strong id="cover-n"></strong> of the 81 squares. That is not a choice in
+    the code — it is the sampling density of the real cell types. Moves to any other square are
+    unreachable by this readout, and when the circuit produces nothing at all the move falls back
+    to random, which is counted and reported rather than hidden.</p>
+
+    <h3>The comparison that matters</h3>
+    <p>Win rates over twelve games are mostly luck, so the stronger test is the one with a data
+    point per board: show the real brain and the shuffled copy the <strong>identical
+    position</strong> and ask whether they choose the same square. Alongside it, a plain
+    peak-luminance heuristic — no neurons at all — plays the same boards, which asks whether the
+    circuit contributes anything the image does not already say.</p>
+    <p id="verdict"></p>
+
+    <h3>Where the honest version of this goes</h3>
+    <p>A fly's visual system is not built for board games, and this project has measured what it is
+    built for: LC4 and LPLC2 converge onto the giant fibre, 311 cells onto 2, and that pathway
+    responds to looming at 280 Hz while beating its shuffle null. A demo that let the same circuit
+    dodge an approaching object would be testing the thing the animal actually does. Gomoku tests
+    whether a wiring diagram can be made to look like it is playing, which is a different and much
+    easier question.</p>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>/*DATA*/</script>
+<script>
+const D = window.GOMOKU, N = D.meta.board, NN = N * N;
+const $ = id => document.getElementById(id);
+const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+const fmt = n => n.toLocaleString("en-US");
+
+const byArm = { real: [], scrambled: [] };
+for (const g of D.games) (byArm[g.arm] ||= []).push(g);
+const NG = Math.min(byArm.real.length, byArm.scrambled.length);
+let gi = 0, mv = 0, playing = true, showHeat = true;
+
+function boardAt(game, upto) {
+  const b = new Int8Array(NN);
+  for (let i = 0; i < upto && i < game.moves.length; i++) b[game.moves[i]] = 1 + (i % 2);
+  return b;
+}
+function fit(c, h) {
+  const r = Math.min(2, window.devicePixelRatio || 1), w = c.clientWidth || 340;
+  c.width = w * r; c.height = h * r;
+  c.style.height = h + "px";        // else the height *attribute* becomes the CSS height
+  const x = c.getContext("2d"); x.setTransform(r, 0, 0, r, 0, 0); return { x, w, h };
+}
+function drawBoard(canvas, game, upto) {
+  const { x, w, h } = fit(canvas, 380);
+  const s = Math.min(w, h) - 8, ox = (w - s) / 2, oy = (h - s) / 2, cell = s / N;
+  x.clearRect(0, 0, w, h);
+  x.fillStyle = css("--sunk"); x.fillRect(ox, oy, s, s);
+
+  // the circuit's salience over the empty squares, for the move about to be played
+  const flyMoveIdx = Math.floor(upto / 2);
+  const sc = showHeat && game.scores && game.scores[flyMoveIdx];
+  if (sc) {
+    const mx = Math.max(...sc);
+    if (mx > 0) for (let i = 0; i < NN; i++) {
+      if (sc[i] <= 0) continue;
+      const v = sc[i] / mx;
+      x.fillStyle = css("--hot");
+      x.globalAlpha = 0.06 + 0.42 * v;
+      x.fillRect(ox + (i % N) * cell, oy + Math.floor(i / N) * cell, cell, cell);
+    }
+    x.globalAlpha = 1;
+  }
+  x.strokeStyle = css("--hair"); x.lineWidth = 1;
+  for (let i = 0; i <= N; i++) {
+    const p = Math.round(ox + i * cell) + .5;
+    x.beginPath(); x.moveTo(p, oy); x.lineTo(p, oy + s); x.stroke();
+    const q = Math.round(oy + i * cell) + .5;
+    x.beginPath(); x.moveTo(ox, q); x.lineTo(ox + s, q); x.stroke();
+  }
+  const b = boardAt(game, upto);
+  for (let i = 0; i < NN; i++) {
+    if (!b[i]) continue;
+    const cx = ox + (i % N) * cell + cell / 2, cy = oy + Math.floor(i / N) * cell + cell / 2;
+    x.beginPath(); x.arc(cx, cy, cell * 0.34, 0, 6.284);
+    x.fillStyle = b[i] === 1 ? css("--fly") : css("--opp");
+    x.globalAlpha = b[i] === 1 ? 0.95 : 0.7; x.fill(); x.globalAlpha = 1;
+  }
+  const last = game.moves[upto - 1];
+  if (last !== undefined) {
+    const cx = ox + (last % N) * cell + cell / 2, cy = oy + Math.floor(last / N) * cell + cell / 2;
+    x.beginPath(); x.arc(cx, cy, cell * 0.44, 0, 6.284);
+    x.strokeStyle = css("--ink"); x.lineWidth = 1.6; x.globalAlpha = .7; x.stroke();
+    x.globalAlpha = 1;
+  }
+}
+function drawRF() {
+  const { x, w, h } = fit($("rf"), 300);
+  const s = Math.min(w, h) - 8, ox = (w - s) / 2, oy = (h - s) / 2, cell = s / N;
+  x.clearRect(0, 0, w, h);
+  const hit = new Set(D.meta.rf_vote);
+  for (let i = 0; i < NN; i++) {
+    // reachable and unreachable were nearly the same colour; the whole point of this panel is
+    // that most of the board is out of range
+    x.fillStyle = hit.has(i) ? "rgba(255,174,60,0.09)" : css("--bg");
+    x.fillRect(ox + (i % N) * cell, oy + Math.floor(i / N) * cell, cell, cell);
+    if (!hit.has(i)) {
+      x.strokeStyle = css("--dead"); x.lineWidth = 1; x.globalAlpha = .6;
+      const cx = ox + (i % N) * cell, cy = oy + Math.floor(i / N) * cell;
+      x.beginPath(); x.moveTo(cx + 4, cy + 4); x.lineTo(cx + cell - 4, cy + cell - 4); x.stroke();
+      x.globalAlpha = 1;
+    }
+  }
+  x.strokeStyle = css("--hair"); x.lineWidth = 1;
+  for (let i = 0; i <= N; i++) {
+    const p = Math.round(ox + i * cell) + .5;
+    x.beginPath(); x.moveTo(p, oy); x.lineTo(p, oy + s); x.stroke();
+    const q = Math.round(oy + i * cell) + .5;
+    x.beginPath(); x.moveTo(ox, q); x.lineTo(ox + s, q); x.stroke();
+  }
+  for (const [u, v] of D.meta.rf_uv) {
+    x.beginPath(); x.arc(ox + u * s, oy + v * s, 2.4, 0, 6.284);
+    x.fillStyle = css("--fly"); x.globalAlpha = .8; x.fill();
+  }
+  x.globalAlpha = 1;
+}
+
+function render() {
+  const gr = byArm.real[gi], gs = byArm.scrambled[gi];
+  const len = Math.max(gr.moves.length, gs.moves.length);
+  drawBoard($("b-real"), gr, Math.min(mv, gr.moves.length));
+  drawBoard($("b-scram"), gs, Math.min(mv, gs.moves.length));
+  const label = r => r === "fly" ? "fly wins" : r === "random" ? "opponent wins" : "draw";
+  $("st-real").textContent = mv >= gr.moves.length ? label(gr.result)
+    : `move ${Math.min(mv, gr.moves.length)}/${gr.moves.length}`;
+  $("st-scram").textContent = mv >= gs.moves.length ? label(gs.result)
+    : `move ${Math.min(mv, gs.moves.length)}/${gs.moves.length}`;
+  $("gno").textContent = `game ${gi + 1}/${NG}`;
+  $("movelbl").textContent = `move ${mv} of ${len}`;
+  $("scrub").max = len; $("scrub").value = mv;
+}
+
+/* ---- how far from the eye the activity actually gets ---- */
+function rewardTable() {
+  const R = window.REWARD; if (!R) return;
+  // null means the population is graded and cannot appear in a spike record at all. It must render
+  // as "not measured", never as a zero — the two look identical on a page and mean the opposite.
+  const n = (x, c) => x === null ? `<td class="n" style="color:var(--muted)">n/a</td>`
+    : `<td class="n" style="color:var(--${c})${x === 0 ? ';font-weight:650' : ""}">` +
+      `${x === 0 ? "0" : x.toFixed(x < 10 ? 1 : 0)}</td>`;
+  $("reward-tb").innerHTML = R.rows.map(r =>
+    `<tr${r.real === null ? ' style="opacity:.55"' : ""}>` +
+    `<td style="text-align:left"><b>${r.name}</b>` +
+      `<span style="color:var(--muted)"> · ${r.note}</span></td>` +
+    `<td class="n" style="color:var(--muted)">${r.in_volume.toLocaleString()}</td>` +
+    `<td class="n" style="color:var(--muted)${r.sampled < 10 ? ";color:var(--hot)" : ""}">` +
+      `${r.sampled.toLocaleString()}</td>` +
+    n(r.real, "fly") + n(r.scrambled, "scram") + `</tr>`).join("");
+  const kc = R.rows.find(r => r.name === "KC");
+  $("rw-moves").textContent = R.moves_real;
+  $("rw-kc").textContent = kc ? kc.sampled.toLocaleString() : "the";
+}
+rewardTable();
+
+/* ---- the plastic version: does depression become discrimination? ---- */
+function condPanel() {
+  const C = window.COND; if (!C) return;
+  const ARMS = [
+    ["paired", "trained", "odour and reward together"],
+    ["unpaired", "control", "same odour, same reward, never at once"],
+    ["shuffled", "null", "KC&rarr;MBON wiring shuffled"],
+  ];
+  const top = Math.max(...ARMS.map(([k]) => C.arms[k].d_plus_mean + C.arms[k].d_plus_sd), 0.05);
+  const bar = (v, sd, col) => {
+    const pc = Math.max(0, 100 * v / top);
+    return `<div style="display:flex;align-items:center;gap:8px">` +
+      `<div style="flex:1;height:15px;background:var(--sunk);border-radius:3px;position:relative">` +
+      `<div style="width:${pc}%;height:100%;background:var(--${col});border-radius:3px"></div></div>` +
+      `<span class="n" style="min-width:92px;color:var(--${col})">` +
+      `${(100*v).toFixed(1)}% <span style="color:var(--muted)">±${(100*sd).toFixed(1)}</span>` +
+      `</span></div>`;
+  };
+  $("cond-bars").innerHTML = ARMS.map(([k, name, note]) => {
+    const a = C.arms[k];
+    // S is a ratio of two things that both go to zero in the unpaired arm, so it is not merely
+    // noisy there — it is undefined, and printing its mean would invite reading it as a value.
+    const unstable = a.S_sd !== null && Math.abs(a.S_sd) > 0.5;
+    const S = (a.S_mean === null || unstable) ? `<span style="color:var(--muted)">undefined</span>`
+      : `${a.S_mean.toFixed(3)} <span style="color:var(--muted)">±${a.S_sd.toFixed(2)}</span>`;
+    return `<div style="margin-bottom:18px">` +
+      `<p class="lbl" style="margin:0 0 6px">${name} <span style="color:var(--muted);` +
+      `text-transform:none;letter-spacing:0">&middot; ${note}</span>` +
+      `<span style="float:right;color:var(--muted);text-transform:none;letter-spacing:0">` +
+      `specificity S = <b style="color:var(--ink)">${S}</b></span></p>` +
+      `<div style="display:grid;gap:5px">` +
+        `<div style="display:flex;gap:8px;align-items:center">` +
+          `<span class="tpn" style="min-width:46px;color:var(--muted)">CS+</span>` +
+          bar(a.d_plus_mean, a.d_plus_sd, "fly") + `</div>` +
+        `<div style="display:flex;gap:8px;align-items:center">` +
+          `<span class="tpn" style="min-width:46px;color:var(--muted)">CS&minus;</span>` +
+          bar(a.d_minus_mean, a.d_minus_sd, "scram") + `</div>` +
+      `</div></div>`;
+  }).join("");
+
+  const P = C.arms.paired, U = C.arms.unpaired, H = C.arms.shuffled;
+  const chip = (ok, txt) => `<b style="color:var(--${ok ? "fly" : "hot"})">${txt}</b>`;
+  const gap = P.S_mean - H.S_mean;
+  const se = Math.sqrt((P.S_sd ** 2 + H.S_sd ** 2) / C.meta.seeds);
+  $("cond-verdict").innerHTML =
+    `<b>It learns.</b> Training drops the rewarded odour's output by ` +
+    `<b>${(100*P.d_plus_mean).toFixed(0)}%</b>, while the unpaired control — identical odour, ` +
+    `identical reward, never simultaneous — moves ` +
+    `<b>${(100*U.d_plus_mean).toFixed(0)}%</b>. That is ${chip(C.verdict.learning,
+      C.verdict.learning ? "a pass" : "a fail")} on the threshold frozen beforehand, and it is a ` +
+    `real coincidence detector rather than a decay: take away the simultaneity and the learning ` +
+    `goes with it.<br><br>` +
+    `<b>It does not discriminate.</b> The unrewarded odour falls almost as far, giving a ` +
+    `specificity of <b>${P.S_mean.toFixed(2)}</b> against the 0.20 required — ` +
+    `${chip(C.verdict.discrimination, C.verdict.discrimination ? "a pass" : "a fail")}, and ` +
+    `further under the line than the 0.11 predicted beforehand. Two odours share about four ` +
+    `fifths of their Kenyon cells here, so depressing one pathway depresses most of the other. ` +
+    `<br><br>` +
+    `<b>And the wiring earns nothing.</b> A degree-preserving shuffle of the same KC&rarr;MBON ` +
+    `connections reaches <b>${H.S_mean.toFixed(2)}</b>, which is ` +
+    `${Math.abs(gap / se).toFixed(1)} standard errors from the real ` +
+    `${gap < 0 ? "wiring, on the higher side of it" : "wiring"} — indistinguishable. Whatever ` +
+    `separates these two odours at all, the measured connectome is not what does it. ` +
+    `<span style="color:var(--muted)">The learning rule is not the limit. The code feeding it is: ` +
+    `at ${(100*C.probe.kc_fraction).toFixed(0)}% of Kenyon cells active per odour against a few ` +
+    `per cent in a real fly, and ${(100*C.probe.kc_overlap).toFixed(0)}% of that code shared ` +
+    `between any two odours, there is not enough separation in the input for any rule to ` +
+    `exploit.</span>`;
+}
+condPanel();
+
+/* ---- results ---- */
+const B = D.boards, S = D.summary;
+function table() {
+  const pct = (a, b) => `${a}/${b} · ${(100 * a / b).toFixed(0)}%`;
+  const rows = [
+    ["games won against a random opponent", `${S.real.wins}/${D.meta.games}`,
+     `${S.scrambled.wins}/${D.meta.games}`],
+    ["moves the circuit actually decided",
+     pct(S.real.moves_from_circuit, S.real.moves_from_circuit + S.real.moves_random_because_silent),
+     pct(S.scrambled.moves_from_circuit,
+         S.scrambled.moves_from_circuit + S.scrambled.moves_random_because_silent)],
+    ["matched a plain peak-luminance heuristic",
+     pct(B.equals_peak_luminance.real, B.n), pct(B.equals_peak_luminance.scrambled, B.n)],
+  ];
+  $("tb").innerHTML = rows.map(r =>
+    `<tr><td>${r[0]}</td><td class="n" style="color:var(--fly)">${r[1]}</td>` +
+    `<td class="n" style="color:var(--scram)">${r[2]}</td></tr>`).join("")
+    + `<tr><td><b>the two brains chose the same square</b></td>` +
+      `<td class="n" colspan="2" style="text-align:right;color:var(--ink)">` +
+      `${B.real_equals_scrambled}/${B.n} · ${(100*B.real_equals_scrambled/B.n).toFixed(0)}%` +
+      `<span style="color:var(--muted)"> (chance ≈ ${(100*B.chance_same_square).toFixed(0)}%)</span>` +
+      `</td></tr>`;
+}
+if (D.brain) $("cloud-n").textContent = D.brain.n.toLocaleString("en-US");
+$("rf-cover").textContent = `the other ${NN - D.meta.squares_covered} are crossed out.`;
+$("cover-n").textContent = D.meta.squares_covered;
+
+const agreePct = 100 * B.real_equals_scrambled / B.n, chance = 100 * B.chance_same_square;
+$("verdict").innerHTML =
+  `Over <strong>${B.n}</strong> identical boards the two brains picked the same square ` +
+  `<strong>${B.real_equals_scrambled}</strong> times — ${agreePct.toFixed(0)} % against a chance ` +
+  `rate near ${chance.toFixed(0)} %. The real connectome matched the luminance heuristic on ` +
+  `<strong>${B.equals_peak_luminance.real}</strong> of them and the shuffled copy on ` +
+  `<strong>${B.equals_peak_luminance.scrambled}</strong>. ` +
+  (agreePct > 3 * chance
+    ? `The two agree far above chance, which means the shuffle barely changed the answer: what is ` +
+      `choosing the move is the image, not the wiring.`
+    : `They disagree about as often as chance would predict, so the wiring is at least changing ` +
+      `the answer — which is not the same as improving it.`);
+
+$("m-ds").textContent = D.meta.dataset;
+$("m-ro").textContent = D.meta.readout.join(" + ");
+$("m-nr").textContent = fmt(D.meta.n_readout);
+$("m-bd").textContent = `${N}×${N}, five in a row`;
+$("foot").innerHTML =
+  `Connectome <b>${D.meta.dataset}</b>. The optic lobe runs as graded units and everything else ` +
+  `spikes; the board is shown for ${D.meta.frames} frames per move and the move is the square with ` +
+  `the most lobula spiking, where each cell votes for the square its receptive-field centre falls ` +
+  `in. Shuffled arm is a degree-preserving permutation of the same graph, seeing the same boards. ` +
+  `No learning, no reward, no training — this is a fixed wiring diagram with a board painted on ` +
+  `its eye. The spiking kernel was verified against the published Brian2 reference before any of ` +
+  `this was used.`;
+
+/* ---- transport ---- */
+let last = 0;
+function tick(t) {
+  stepScene(t);
+  if (playing && t - last > 520) {
+    const len = Math.max(byArm.real[gi].moves.length, byArm.scrambled[gi].moves.length);
+    mv++;
+    if (mv > len + 2) { mv = 0; gi = (gi + 1) % NG; }
+    last = t; render();
+  }
+  requestAnimationFrame(tick);
+
+
+}
+$("play").addEventListener("click", () => { playing = !playing;
+  $("play").textContent = playing ? "Pause" : "Play";
+  $("play").setAttribute("aria-pressed", String(playing)); });
+$("scrub").addEventListener("input", e => { playing = false; $("play").textContent = "Play";
+  $("play").setAttribute("aria-pressed", "false"); mv = +e.target.value; render(); });
+$("prev").addEventListener("click", () => { gi = (gi - 1 + NG) % NG; mv = 0; render(); });
+$("next").addEventListener("click", () => { gi = (gi + 1) % NG; mv = 0; render(); });
+$("heat").addEventListener("click", () => { showHeat = !showHeat;
+  $("heat").setAttribute("aria-pressed", String(showHeat)); render(); });
+addEventListener("resize", () => { render(); drawRF(); });
+
+function drawHist(id, arm, colour) {
+  const c = $(id), { x, w, h } = fit(c, 150);
+  const s = Math.min(w, h) - 4, ox = (w - s) / 2, oy = 2, cell = s / N;
+  const cnt = new Float64Array(NN);
+  for (const g of byArm[arm]) g.moves.forEach((m, i) => { if (i % 2 === 0) cnt[m]++; });
+  const mx = Math.max(1, ...cnt);
+  x.clearRect(0, 0, w, h);
+  for (let i = 0; i < NN; i++) {
+    x.fillStyle = colour; x.globalAlpha = 0.05 + 0.9 * (cnt[i] / mx);
+    x.fillRect(ox + (i % N) * cell, oy + Math.floor(i / N) * cell, cell - 1, cell - 1);
+  }
+  x.globalAlpha = 1;
+}
+function drawHists() {
+  drawHist("h-real", "real", css("--fly"));
+  drawHist("h-scram", "scrambled", css("--scram"));
+}
+addEventListener("resize", drawHists);
+
+table(); drawRF(); drawHists(); render();
+
+/* ---- the head-to-head scene, sharing the transport with the 2D boards ---- */
+const H2H = D.h2h && D.h2h.length ? D.h2h : null;
+const SCENE = { game: H2H ? H2H[0] : byArm.real[0], upto: 0 };
+let scene3dOK = false, drawScene = null, brainStep = null;
+if (H2H) {
+  const sc = D.h2h_score || {};
+  $("h2h-score").textContent =
+    `real ${sc.real || 0} · shuffled ${sc.scrambled || 0} · draws ${sc.draw || 0}` +
+    ` over ${H2H.length} games`;
+  try { /*CODE*/ scene3dOK = true; }
+  catch (e) {
+    $("gl3").replaceWith(Object.assign(document.createElement("p"), {
+      className: "tpn",
+      style: "padding:22px;color:var(--hot)",
+      textContent: "This view needs WebGL, which this browser did not provide: " + e
+        + "  Everything below is unaffected."}));
+  }
+} else {
+  $("h2h-sub").textContent = "not run for this dataset";
+}
+
+if (H2H) {
+  const sc = D.h2h_score || {};
+  const n = H2H.length;
+  $("h2h-verdict").innerHTML =
+    `Played head to head, alternating who opens, the shuffled copy won <strong>` +
+    `${sc.scrambled}</strong> of ${n} and the real connectome won <strong>${sc.real}</strong>. ` +
+    `Not close, and not a first-move effect — the openings were split evenly. The reason is in ` +
+    `the fallback counts above: the real wiring falls silent far more often, so it plays at ` +
+    `random far more often, and random loses to anything with a consistent bias. ` +
+    `<strong>A randomised copy of a fly brain beats the fly brain at this game.</strong> Every ` +
+    `demo of this shape should be asked for that number.`;
+}
+
+let h2hGame = 0, h2hMove = 0, lastH = 0;
+function stepScene(t) {
+  if (!H2H) return;
+  const g = H2H[h2hGame];
+  if (playing && t - lastH > 560) {
+    h2hMove++;
+    if (h2hMove > g.moves.length + 3) { h2hMove = 0; h2hGame = (h2hGame + 1) % H2H.length; }
+    lastH = t;
+  }
+  const gg = H2H[h2hGame];
+  const prev = SCENE.upto;
+  SCENE.game = gg; SCENE.upto = Math.min(h2hMove, gg.moves.length);
+  if (scene3dOK && brainStep && SCENE.upto !== prev && SCENE.upto > 0 && gg.active) {
+    const i = SCENE.upto - 1;
+    brainStep(gg.whose[i], gg.active[i]);   // only the player that just moved lights up
+  }
+  const played = who => gg.whose.slice(0, SCENE.upto).filter(x => x === who).length;
+  const fell = who => gg.whose.slice(0, SCENE.upto)
+    .reduce((n, x, i) => n + (x === who && gg.fell_back[i] ? 1 : 0), 0);
+  $("h3-real").textContent = `${played(1)} stones · ${fell(1)} random fallbacks`;
+  $("h3-scram").textContent = `${played(2)} stones · ${fell(2)} random fallbacks`;
+  if (gg.active && SCENE.upto > 0) {
+    const i = SCENE.upto - 1;
+    const n = new Uint32Array(decB(gg.active[i]).buffer).length;
+    $("h3-" + (gg.whose[i] === 1 ? "real" : "scram") + "-n").textContent =
+      `${n} cells fired on that move`;
+  }
+  $("h3-note").textContent =
+    SCENE.upto >= gg.moves.length
+      ? `game ${h2hGame + 1}/${H2H.length} — ${gg.result === "draw" ? "drawn"
+          : gg.result + " won"} in ${gg.moves.length} moves` +
+        ` · ${gg.opened} opened`
+      : `game ${h2hGame + 1}/${H2H.length}, move ${SCENE.upto}/${gg.moves.length}` +
+        ` · ${gg.opened} opened`;
+  if (scene3dOK) drawScene(t);
+}
+requestAnimationFrame(tick);
+
+/*CODE*/
+</script>

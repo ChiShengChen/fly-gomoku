@@ -1,0 +1,52 @@
+14 of 139,255 cells have no coordinate; placed at the centroid rather than left NaN
+LC4: 50/50 on the R side got a receptive-field centre from the wiring
+LPLC2: 102/102 on the R side got a receptive-field centre from the wiring
+152 readout cells cover 30/81 board squares
+  10/60 boards (43s)
+  20/60 boards (84s)
+  30/60 boards (126s)
+  40/60 boards (169s)
+  50/60 boards (211s)
+  60/60 boards (253s)
+
+same board, both brains: they chose the same square 5/60 times
+  real       matched the plain peak-luminance heuristic 0/60, circuit decided 60/60
+  scrambled  matched the plain peak-luminance heuristic 0/60, circuit decided 60/60
+  real       game 0: fly    in 13 moves (267s)
+  real       game 1: random in 44 moves (308s)
+  real       game 2: fly    in 47 moves (354s)
+  real       game 3: fly    in 13 moves (367s)
+  real       game 4: fly    in 13 moves (380s)
+  real       game 5: fly    in 13 moves (394s)
+  real       game 6: fly    in 33 moves (426s)
+  real       game 7: fly    in 13 moves (439s)
+  real       game 8: fly    in 13 moves (453s)
+  real       game 9: fly    in 45 moves (496s)
+  real       game 10: fly    in 13 moves (509s)
+  real       game 11: fly    in 13 moves (522s)
+real: 11/12 wins, 30 moves fell back to random because the circuit was silent
+  scrambled  game 0: fly    in 45 moves (576s)
+  scrambled  game 1: fly    in 19 moves (600s)
+  scrambled  game 2: fly    in 21 moves (625s)
+  scrambled  game 3: fly    in 31 moves (663s)
+  scrambled  game 4: fly    in 23 moves (690s)
+  scrambled  game 5: fly    in 21 moves (716s)
+  scrambled  game 6: fly    in 37 moves (760s)
+  scrambled  game 7: fly    in 23 moves (788s)
+  scrambled  game 8: fly    in 21 moves (813s)
+  scrambled  game 9: fly    in 23 moves (841s)
+  scrambled  game 10: fly    in 29 moves (876s)
+  scrambled  game 11: fly    in 23 moves (904s)
+scrambled: 12/12 wins, 5 moves fell back to random because the circuit was silent
+brain cloud: 28,126 of 139,255 cells (all 152 readouts plus a sample)
+  head-to-head game 0: scrambled won in 26 moves (965s)
+  head-to-head game 1: scrambled won in 23 moves (1018s)
+  head-to-head game 2: scrambled won in 26 moves (1078s)
+  head-to-head game 3: scrambled won in 23 moves (1130s)
+  head-to-head game 4: scrambled won in 24 moves (1185s)
+  head-to-head game 5: scrambled won in 25 moves (1243s)
+  head-to-head game 6: scrambled won in 26 moves (1303s)
+  head-to-head game 7: scrambled won in 25 moves (1361s)
+head to head over 8 games: real 0, scrambled 8, draws 0
+
+wrote gomoku_flywire.json (1361s)

@@ -1,0 +1,348 @@
+/* ---------------------------------------------------------------------------
+   Two flies at a board. The mesh is NeuroMechFly (NeLy-EPFL, Apache-2.0), its
+   kinematic chain resolved from the SDF and decimated by vertex clustering from
+   334,525 triangles to 81,866. The bodies are real anatomy; the posture, the
+   board and the reaching are animation. Which half is which is said on the page.
+--------------------------------------------------------------------------- */
+const F = window.FLY;
+const glc = document.getElementById("gl3");
+const g3 = glc.getContext("webgl", { antialias: true, alpha: false })
+        || glc.getContext("experimental-webgl");
+
+function decB(s) { const b = atob(s), u = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+
+/** merge a set of parts into one interleaved position+normal buffer */
+function buildGroup(names) {
+  const pos = [], idx = [];
+  let base = 0;
+  for (const n of names) {
+    const p = F.parts[n];
+    if (!p) continue;
+    const v = new Uint16Array(decB(p.v).buffer);
+    const f = p.u32 ? new Uint32Array(decB(p.f).buffer) : new Uint16Array(decB(p.f).buffer);
+    for (let i = 0; i < v.length; i += 3) {
+      // into a body-centred frame in millimetres-ish units, y up
+      pos.push(v[i] / 65535 - 0.5, v[i + 2] / 65535 - 0.5, v[i + 1] / 65535 - 0.5);
+    }
+    for (let i = 0; i < f.length; i++) idx.push(f[i] + base);
+    base += v.length / 3;
+  }
+  const P = new Float32Array(pos), I = new Uint32Array(idx);
+  // smooth normals, accumulated per vertex from the faces that touch it
+  const Nr = new Float32Array(P.length);
+  for (let i = 0; i < I.length; i += 3) {
+    const a = I[i] * 3, b = I[i + 1] * 3, c = I[i + 2] * 3;
+    const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+    const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    for (const o of [a, b, c]) { Nr[o] += nx; Nr[o + 1] += ny; Nr[o + 2] += nz; }
+  }
+  for (let i = 0; i < Nr.length; i += 3) {
+    const l = Math.hypot(Nr[i], Nr[i + 1], Nr[i + 2]) || 1;
+    Nr[i] /= l; Nr[i + 1] /= l; Nr[i + 2] /= l;
+  }
+  return { P, Nr, I, count: I.length };
+}
+
+const ALL = Object.keys(F.parts);
+const GROUPS = {
+  wingL: buildGroup(ALL.filter(n => n === "LWing")),
+  wingR: buildGroup(ALL.filter(n => n === "RWing")),
+  eyes:  buildGroup(ALL.filter(n => n === "LEye" || n === "REye")),
+  body:  buildGroup(ALL.filter(n => !["LWing", "RWing", "LEye", "REye"].includes(n))),
+};
+
+const VS3 = `
+attribute vec3 aPos; attribute vec3 aNrm;
+uniform mat4 uMVP; uniform mat4 uModel;
+varying vec3 vN; varying float vY;
+void main(){
+  gl_Position = uMVP * vec4(aPos, 1.0);
+  vN = mat3(uModel) * aNrm;
+  vY = (uModel * vec4(aPos, 1.0)).y;
+}`;
+const FS3 = `
+precision mediump float;
+varying vec3 vN; varying float vY;
+uniform vec3 uCol; uniform float uAlpha; uniform float uEmit;
+void main(){
+  vec3 n = length(vN) > 1e-6 ? normalize(vN) : vec3(0.0, 0.0, 1.0);
+  vec3 L = normalize(vec3(0.4, 0.9, 0.35));
+  float d = max(0.0, dot(n, L));
+  float rim = pow(1.0 - abs(n.z), 2.5);
+  vec3 c = uCol * (0.22 + 0.78 * d) + uCol * rim * 0.55 + uCol * uEmit;
+  gl_FragColor = vec4(c, uAlpha);
+}`;
+function sh3(t, src) { const s = g3.createShader(t); g3.shaderSource(s, src); g3.compileShader(s);
+  if (!g3.getShaderParameter(s, g3.COMPILE_STATUS)) throw g3.getShaderInfoLog(s); return s; }
+const p3 = g3.createProgram();
+g3.attachShader(p3, sh3(g3.VERTEX_SHADER, VS3)); g3.attachShader(p3, sh3(g3.FRAGMENT_SHADER, FS3));
+g3.linkProgram(p3);
+if (!g3.getProgramParameter(p3, g3.LINK_STATUS)) throw g3.getProgramInfoLog(p3);
+g3.useProgram(p3);
+const u3 = n => g3.getUniformLocation(p3, n);
+const aP = g3.getAttribLocation(p3, "aPos"), aN = g3.getAttribLocation(p3, "aNrm");
+g3.enableVertexAttribArray(aP); g3.enableVertexAttribArray(aN);
+g3.getExtension("OES_element_index_uint");
+g3.enable(g3.DEPTH_TEST); g3.enable(g3.BLEND);
+g3.blendFunc(g3.SRC_ALPHA, g3.ONE_MINUS_SRC_ALPHA);
+
+
+
+/* --- tiny mat4 --- */
+const M4 = {
+  id: () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+  mul: (a, b) => { const o = new Float32Array(16);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+      let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + j] * b[i * 4 + k];
+      o[i * 4 + j] = s; } return o; },
+  trs: (t, ry, s) => { const c = Math.cos(ry), n = Math.sin(ry);
+    return new Float32Array([c*s,0,-n*s,0, 0,s,0,0, n*s,0,c*s,0, t[0],t[1],t[2],1]); },
+  rotX: a => { const c = Math.cos(a), s = Math.sin(a);
+    return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]); },
+  rotZ: a => { const c = Math.cos(a), s = Math.sin(a);
+    return new Float32Array([c,s,0,0, -s,c,0,0, 0,0,1,0, 0,0,0,1]); },
+  persp: (fov, asp, n, f) => { const t = 1 / Math.tan(fov / 2);
+    return new Float32Array([t/asp,0,0,0, 0,t,0,0, 0,0,(f+n)/(n-f),-1, 0,0,2*f*n/(n-f),0]); },
+  look: (e, c, up) => {
+    const z = [e[0]-c[0], e[1]-c[1], e[2]-c[2]];
+    let l = Math.hypot(...z); z.forEach((v,i)=>z[i]/=l);
+    const x = [up[1]*z[2]-up[2]*z[1], up[2]*z[0]-up[0]*z[2], up[0]*z[1]-up[1]*z[0]];
+    l = Math.hypot(...x) || 1; x.forEach((v,i)=>x[i]/=l);
+    const y = [z[1]*x[2]-z[2]*x[1], z[2]*x[0]-z[0]*x[2], z[0]*x[1]-z[1]*x[0]];
+    return new Float32Array([x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0,
+      -(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]), -(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]),
+      -(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]), 1]); },
+};
+
+function drawGroup(G, model, vp, col, alpha, emit) {
+  g3.bindBuffer(g3.ARRAY_BUFFER, G.bp); g3.vertexAttribPointer(aP, 3, g3.FLOAT, false, 0, 0);
+  g3.bindBuffer(g3.ARRAY_BUFFER, G.bn); g3.vertexAttribPointer(aN, 3, g3.FLOAT, false, 0, 0);
+  g3.bindBuffer(g3.ELEMENT_ARRAY_BUFFER, G.bi);
+  g3.uniformMatrix4fv(u3("uMVP"), false, M4.mul(vp, model));
+  g3.uniformMatrix4fv(u3("uModel"), false, model);
+  g3.uniform3fv(u3("uCol"), col);
+  g3.uniform1f(u3("uAlpha"), alpha);
+  g3.uniform1f(u3("uEmit"), emit);
+  g3.drawElements(g3.TRIANGLES, G.count, g3.UNSIGNED_INT, 0);
+}
+
+/* --- procedural board furniture: a slab, grid lines, and a stone --- */
+function box(w, h, d) {
+  const P = [], I = [];
+  const s = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+  const hx = w/2, hy = h/2, hz = d/2;
+  const corners = [[-hx,-hy,-hz],[hx,-hy,-hz],[hx,hy,-hz],[-hx,hy,-hz],
+                   [-hx,-hy,hz],[hx,-hy,hz],[hx,hy,hz],[-hx,hy,hz]];
+  const faces = [[1,5,6,2],[4,0,3,7],[3,2,6,7],[4,5,1,0],[5,4,7,6],[0,1,2,3]];
+  faces.forEach((f, fi) => {
+    const b = P.length / 3;
+    f.forEach(ci => P.push(...corners[ci]));
+    I.push(b, b+1, b+2, b, b+2, b+3);
+  });
+  const Nr = new Float32Array(P.length);
+  const PA = new Float32Array(P), IA = new Uint32Array(I);
+  for (let i = 0; i < IA.length; i += 3) {
+    const a = IA[i]*3, b2 = IA[i+1]*3, c = IA[i+2]*3;
+    const ux=PA[b2]-PA[a], uy=PA[b2+1]-PA[a+1], uz=PA[b2+2]-PA[a+2];
+    const vx=PA[c]-PA[a], vy=PA[c+1]-PA[a+1], vz=PA[c+2]-PA[a+2];
+    const nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    for (const o of [a,b2,c]) { Nr[o]+=nx; Nr[o+1]+=ny; Nr[o+2]+=nz; }
+  }
+  for (let i=0;i<Nr.length;i+=3){const l=Math.hypot(Nr[i],Nr[i+1],Nr[i+2])||1;
+    Nr[i]/=l;Nr[i+1]/=l;Nr[i+2]/=l;}
+  return { P: PA, Nr, I: IA, count: IA.length };
+}
+function disc(r, h, seg) {
+  const P = [], I = [];
+  for (let k = 0; k < seg; k++) {
+    const a = k / seg * 6.283, c = Math.cos(a), s = Math.sin(a);
+    P.push(c*r, -h/2, s*r, c*r, h/2, s*r);
+  }
+  const top = P.length/3; P.push(0, h/2, 0);
+  const bot = P.length/3; P.push(0, -h/2, 0);
+  for (let k = 0; k < seg; k++) {
+    const a = k*2, b = ((k+1)%seg)*2;
+    I.push(a, b, b+1, a, b+1, a+1, top, a+1, b+1, bot, b, a);
+  }
+  const PA = new Float32Array(P), IA = new Uint32Array(I), Nr = new Float32Array(P.length);
+  for (let i = 0; i < IA.length; i += 3) {
+    const a=IA[i]*3,b2=IA[i+1]*3,c=IA[i+2]*3;
+    const ux=PA[b2]-PA[a],uy=PA[b2+1]-PA[a+1],uz=PA[b2+2]-PA[a+2];
+    const vx=PA[c]-PA[a],vy=PA[c+1]-PA[a+1],vz=PA[c+2]-PA[a+2];
+    const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+    for (const o of [a,b2,c]) { Nr[o]+=nx; Nr[o+1]+=ny; Nr[o+2]+=nz; }
+  }
+  for (let i=0;i<Nr.length;i+=3){const l=Math.hypot(Nr[i],Nr[i+1],Nr[i+2])||1;
+    Nr[i]/=l;Nr[i+1]/=l;Nr[i+2]/=l;}
+  return { P: PA, Nr, I: IA, count: IA.length };
+}
+function upload(G) {
+  G.bp = g3.createBuffer(); g3.bindBuffer(g3.ARRAY_BUFFER, G.bp);
+  g3.bufferData(g3.ARRAY_BUFFER, G.P, g3.STATIC_DRAW);
+  G.bn = g3.createBuffer(); g3.bindBuffer(g3.ARRAY_BUFFER, G.bn);
+  g3.bufferData(g3.ARRAY_BUFFER, G.Nr, g3.STATIC_DRAW);
+  G.bi = g3.createBuffer(); g3.bindBuffer(g3.ELEMENT_ARRAY_BUFFER, G.bi);
+  g3.bufferData(g3.ELEMENT_ARRAY_BUFFER, G.I, g3.STATIC_DRAW);
+  return G;
+}
+for (const k in GROUPS) upload(GROUPS[k]);
+const SLAB = upload(box(1, 0.04, 1));
+const LINE = upload(box(1, 0.012, 0.006));
+const STONE = upload(disc(0.038, 0.026, 14));
+
+/* --- the scene --- */
+const BOARD = 1.0, CELL = BOARD / N, HALF = BOARD / 2;
+const sq = i => [(i % N + 0.5) * CELL - HALF, 0, (Math.floor(i / N) + 0.5) * CELL - HALF];
+let cam = 0.5, camAuto = true;
+
+drawScene = function (t) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = glc.clientWidth, h = Math.round(Math.min(460, Math.max(250, w * 0.40)));
+  if (glc.width !== w * dpr || glc.height !== h * dpr) {
+    glc.width = w * dpr; glc.height = h * dpr; glc.style.height = h + "px";
+  }
+  g3.viewport(0, 0, glc.width, glc.height);
+  g3.clearColor(0.026, 0.032, 0.047, 1);
+  g3.clear(g3.COLOR_BUFFER_BIT | g3.DEPTH_BUFFER_BIT);
+  if (camAuto) cam += 0.0022;
+  const r = 1.62, ey = 0.78;
+  const vp = M4.mul(M4.persp(0.85, glc.width / glc.height, 0.05, 12),
+                    M4.look([Math.sin(cam) * r, ey, Math.cos(cam) * r], [0, 0.06, 0], [0, 1, 0]));
+
+  drawGroup(SLAB, M4.trs([0, -0.03, 0], 0, 1), vp, hexv("--sunk"), 1, 0);
+  for (let i = 0; i <= N; i++) {
+    const p = i * CELL - HALF;
+    drawGroup(LINE, M4.mul(M4.trs([0, -0.004, p], 0, 1), M4.id()), vp, hexv("--hair"), 1, 0);
+    drawGroup(LINE, M4.mul(M4.trs([p, -0.004, 0], Math.PI / 2, 1), M4.id()), vp,
+              hexv("--hair"), 1, 0);
+  }
+
+  const game = SCENE.game, upto = SCENE.upto;
+  for (let i = 0; i < upto && i < game.moves.length; i++) {
+    const who = game.whose ? game.whose[i] : 1 + (i % 2);
+    const p = sq(game.moves[i]);
+    const fresh = i === upto - 1 ? 1 : 0;
+    drawGroup(STONE, M4.trs([p[0], 0.012, p[2]], 0, 1), vp,
+              who === 1 ? hexv("--fly") : hexv("--scram"), 1, fresh * 0.45);
+  }
+
+  if (window.__DEBUG_FLY) {
+    drawGroup(GROUPS.body, M4.trs([0, 0.25, 0], 0, 1.0), vp,
+              new Float32Array([1, 0.68, 0.24]), 1, 0.25);
+    window.__drew = (window.__drew || 0) + 1;
+    window.__err = g3.getError();
+    return;
+  }
+
+  // the two players, facing each other across the board
+  const nextWho = game.whose ? (game.whose[upto] || game.whose[game.whose.length - 1])
+                             : 1 + (upto % 2);
+  [[1, -1], [2, 1]].forEach(([who, sgn]) => {
+    const active = who === nextWho;
+    const target = game.moves[upto] !== undefined ? sq(game.moves[upto]) : [0, 0, 0];
+    const lean = active ? 0.22 + 0.1 * Math.sin(t / 160) : 0;
+    const bx = (active ? target[0] * 0.35 : 0);
+    // the legs hang in the mesh's neutral pose, so the body sits high enough for them to
+    // reach the board rather than through it
+    const bz = sgn * (HALF + 0.26 - lean * 0.45);
+    const model = M4.mul(M4.trs([bx, 0.20, bz], sgn > 0 ? 0 : Math.PI, 0.40),
+                         M4.rotX(-0.10 - lean * 0.45));
+    const col = who === 1 ? hexv("--fly") : hexv("--scram");
+    drawGroup(GROUPS.body, model, vp, col, 1, active ? 0.10 : 0);
+    drawGroup(GROUPS.eyes, model, vp, hexv("--hot"), 1, 0.35);
+    const beat = Math.sin(t / 16 + who) * (active ? 0.7 : 0.35);
+    for (const [G, s] of [[GROUPS.wingL, 1], [GROUPS.wingR, -1]]) {
+      drawGroup(G, M4.mul(model, M4.rotZ(s * beat * 0.5)), vp, col, 0.30, 0.05);
+    }
+    drawBrain(who, vp, sgn, col);
+  });
+};
+function hexv(k) {
+  const h = getComputedStyle(document.documentElement).getPropertyValue(k).trim().replace("#", "");
+  return new Float32Array([0, 2, 4].map(i => parseInt(h.substr(i, 2), 16) / 255));
+}
+
+/* ---------------------------------------------------------------------------
+   A live point cloud behind each player: the same simulation that chose the
+   move, drawn where the cells actually are. Positions come from the FlyWire
+   volume; a cell lights when it fired while that move was being computed.
+--------------------------------------------------------------------------- */
+const BR = D.brain || null;
+let brainOK = false, brainAct = null, brainPos = null, brainBuf = null, pProg = null;
+if (BR) {
+  const raw = new Uint16Array(decB(BR.pos).buffer);
+  brainPos = new Float32Array(BR.n * 3);
+  for (let i = 0; i < BR.n; i++) {
+    brainPos[i*3]     = raw[i*3] / 65535 - 0.5;
+    brainPos[i*3 + 1] = 0.5 - raw[i*3 + 1] / 65535;   // the volume's y grows downward
+    brainPos[i*3 + 2] = raw[i*3 + 2] / 65535 - 0.5;
+  }
+  brainAct = { 1: new Float32Array(BR.n), 2: new Float32Array(BR.n) };
+  const PVS = `
+attribute vec3 aPos; attribute float aAct;
+uniform mat4 uMVP; uniform float uScale; uniform float uDpr;
+varying float vAct;
+void main(){
+  gl_Position = uMVP * vec4(aPos, 1.0);
+  gl_PointSize = (0.9 + aAct * 2.6) * uScale * uDpr;
+  vAct = aAct;
+}`;
+  const PFS = `
+precision mediump float;
+varying float vAct;
+uniform vec3 uCol;
+void main(){
+  vec2 d = gl_PointCoord - vec2(0.5);
+  if (dot(d, d) > 0.25) discard;
+  gl_FragColor = vec4(uCol * (0.30 + 0.75 * vAct), 0.022 + 0.16 * vAct);
+}`;
+  pProg = g3.createProgram();
+  g3.attachShader(pProg, sh3(g3.VERTEX_SHADER, PVS));
+  g3.attachShader(pProg, sh3(g3.FRAGMENT_SHADER, PFS));
+  g3.linkProgram(pProg);
+  if (g3.getProgramParameter(pProg, g3.LINK_STATUS)) {
+    brainOK = true;
+    brainBuf = { pos: g3.createBuffer(), act: g3.createBuffer() };
+    g3.bindBuffer(g3.ARRAY_BUFFER, brainBuf.pos);
+    g3.bufferData(g3.ARRAY_BUFFER, brainPos, g3.STATIC_DRAW);
+    g3.bindBuffer(g3.ARRAY_BUFFER, brainBuf.act);
+    g3.bufferData(g3.ARRAY_BUFFER, brainAct[1], g3.DYNAMIC_DRAW);
+  }
+}
+
+/** decay, then light the cells that fired while this move was being computed */
+brainStep = function (who, b64idx) {
+  if (!brainOK) return;
+  const A = brainAct[who];
+  for (let i = 0; i < A.length; i++) A[i] *= 0.55;
+  if (b64idx) {
+    const ix = new Uint32Array(decB(b64idx).buffer);
+    for (let k = 0; k < ix.length; k++) A[ix[k]] = 1.0;
+  }
+};
+
+function drawBrain(who, vp, sgn, col) {
+  if (!brainOK) return;
+  g3.useProgram(pProg);
+  const aPp = g3.getAttribLocation(pProg, "aPos");
+  const aAp = g3.getAttribLocation(pProg, "aAct");
+  g3.enableVertexAttribArray(aPp); g3.enableVertexAttribArray(aAp);
+  g3.bindBuffer(g3.ARRAY_BUFFER, brainBuf.pos);
+  g3.vertexAttribPointer(aPp, 3, g3.FLOAT, false, 0, 0);
+  g3.bindBuffer(g3.ARRAY_BUFFER, brainBuf.act);
+  g3.bufferData(g3.ARRAY_BUFFER, brainAct[who], g3.DYNAMIC_DRAW);
+  g3.vertexAttribPointer(aAp, 1, g3.FLOAT, false, 0, 0);
+  const m = M4.mul(M4.trs([sgn * 0.40, 0.50, sgn * (HALF + 0.62)], sgn > 0 ? 0 : Math.PI, 0.36),
+                   M4.rotX(-0.22));
+  g3.uniformMatrix4fv(g3.getUniformLocation(pProg, "uMVP"), false, M4.mul(vp, m));
+  g3.uniform3fv(g3.getUniformLocation(pProg, "uCol"), col);
+  g3.uniform1f(g3.getUniformLocation(pProg, "uScale"), Math.max(0.8, glc.clientWidth / 1500));
+  g3.uniform1f(g3.getUniformLocation(pProg, "uDpr"), Math.min(2, window.devicePixelRatio || 1));
+  g3.depthMask(false); g3.blendFunc(g3.SRC_ALPHA, g3.ONE);
+  g3.drawArrays(g3.POINTS, 0, BR.n);
+  g3.depthMask(true); g3.blendFunc(g3.SRC_ALPHA, g3.ONE_MINUS_SRC_ALPHA);
+  g3.useProgram(p3);
+  g3.enableVertexAttribArray(aP); g3.enableVertexAttribArray(aN);
+}

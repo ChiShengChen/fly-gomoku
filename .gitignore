@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.venv/
+# the connectome itself is downloaded, not carried — see data/README.md
+data/raw/

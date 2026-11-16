@@ -1,0 +1,60 @@
+{
+ "moves_real": 97,
+ "moves_scrambled": 101,
+ "rows": [
+  {
+   "name": "KC",
+   "note": "Kenyon cells",
+   "in_volume": 5177,
+   "sampled": 1042,
+   "graded": false,
+   "real": 0.0,
+   "scrambled": 110.95
+  },
+  {
+   "name": "MBON",
+   "note": "mushroom body output",
+   "in_volume": 96,
+   "sampled": 20,
+   "graded": false,
+   "real": 0.14,
+   "scrambled": 16.0
+  },
+  {
+   "name": "PAM",
+   "note": "dopamine, reward",
+   "in_volume": 307,
+   "sampled": 69,
+   "graded": false,
+   "real": 0.0,
+   "scrambled": 10.75
+  },
+  {
+   "name": "PPL1",
+   "note": "dopamine, punishment",
+   "in_volume": 16,
+   "sampled": 1,
+   "graded": false,
+   "real": 0.0,
+   "scrambled": 1.0
+  },
+  {
+   "name": "LC4 + LPLC2",
+   "note": "the readout itself",
+   "in_volume": 314,
+   "sampled": 182,
+   "graded": false,
+   "real": 56.0,
+   "scrambled": 98.54
+  },
+  {
+   "name": "Mi1 + Tm1",
+   "note": "medulla \u2014 graded, never spikes",
+   "in_volume": 3139,
+   "sampled": 607,
+   "graded": true,
+   "real": null,
+   "scrambled": null
+  }
+ ]
+}

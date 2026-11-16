@@ -1,0 +1,84 @@
+/* ---------------------------------------------------------------------------
+   The pathway as an SVG, built from measured synapse totals. Every arrow has a
+   number behind it: thickness is the signed synapse count between two cell
+   types, colour is its sign, and the curves running right-to-left are feedback.
+--------------------------------------------------------------------------- */
+const CIR = window.CIRCUIT;
+(function drawCircuit() {
+  const host = document.getElementById("circuit");
+  if (!host || !CIR) return;
+  const W = 1120, H = 430, PAD = 56;
+  const cols = CIR.layers.filter(l => l.types.length);
+  const at = {};
+  cols.forEach((L, ci) => {
+    const x = PAD + ci * ((W - PAD * 2) / (cols.length - 1));
+    L.types.forEach((t, ti) => {
+      const n = L.types.length;
+      at[t] = { x, y: 74 + (H - 150) * (n === 1 ? 0.5 : ti / (n - 1)), col: ci };
+    });
+  });
+  const maxSyn = Math.max(...CIR.edges.map(e => Math.abs(e.syn)));
+  const wOf = s => 0.6 + 5.2 * Math.sqrt(Math.abs(s) / maxSyn);
+  const loopKey = new Set(CIR.loops.map(e => e.from + ">" + e.to));
+
+  const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block" `
+    + `role="img" aria-label="the visual pathway, arrows weighted by synapse count">`;
+  cols.forEach((L, ci) => {
+    const x = PAD + ci * ((W - PAD * 2) / (cols.length - 1));
+    svg += `<text x="${x}" y="36" text-anchor="middle" class="cx-lyr">${esc(L.name)}</text>`;
+  });
+
+  const shown = CIR.edges;
+  for (const e of shown) {
+    const a = at[e.from], b = at[e.to];
+    if (!a || !b) continue;
+    const back = b.col < a.col || (b.col === a.col && b.y < a.y);
+    const dx = b.x - a.x, mx = (a.x + b.x) / 2;
+    const bow = back ? 62 : Math.min(40, Math.abs(dx) * 0.22);
+    const d = `M ${a.x} ${a.y} C ${mx} ${a.y - bow}, ${mx} ${b.y - bow}, ${b.x} ${b.y}`;
+    const cls = (e.syn > 0 ? "cx-exc" : "cx-inh") + (back ? " cx-back" : "")
+      + (loopKey.has(e.from + ">" + e.to) ? " cx-loop" : "");
+    svg += `<path d="${d}" class="${cls}" stroke-width="${wOf(e.syn).toFixed(2)}" `
+      + `data-from="${esc(e.from)}" data-to="${esc(e.to)}"><title>${esc(e.from)} → `
+      + `${esc(e.to)}: ${e.syn > 0 ? "+" : "−"}${Math.abs(e.syn).toLocaleString("en-US")} `
+      + `synapses</title></path>`;
+  }
+  for (const [t, p] of Object.entries(at)) {
+    const n = CIR.cells[t] || 0;
+    const r = 4 + 5 * Math.sqrt(Math.min(1, n / 3000));
+    svg += `<circle cx="${p.x}" cy="${p.y}" r="${r.toFixed(1)}" class="cx-node" `
+      + `data-t="${esc(t)}"><title>${esc(t)}: ${n.toLocaleString("en-US")} cells</title></circle>`
+      + `<text x="${p.x + r + 5}" y="${p.y + 3.5}" class="cx-lbl">${esc(t)}</text>`;
+  }
+  svg += `</svg>`;
+  host.innerHTML = svg;
+
+  // hovering a cell type dims everything it does not touch
+  const paths = [...host.querySelectorAll("path")];
+  for (const c of host.querySelectorAll("circle")) {
+    const t = c.getAttribute("data-t");
+    const on = () => { host.classList.add("cx-focus");
+      paths.forEach(p => p.classList.toggle("cx-hit",
+        p.dataset.from === t || p.dataset.to === t)); };
+    const off = () => { host.classList.remove("cx-focus");
+      paths.forEach(p => p.classList.remove("cx-hit")); };
+    c.addEventListener("mouseenter", on); c.addEventListener("mouseleave", off);
+    c.addEventListener("focus", on); c.addEventListener("blur", off);
+    c.setAttribute("tabindex", "0");
+  }
+
+  const rows = CIR.loops.slice(0, 6).map(e => {
+    const s = v => (v > 0 ? "+" : "−") + Math.abs(v).toLocaleString("en-US");
+    const cls = v => v > 0 ? "cx-exc-t" : "cx-inh-t";
+    return `<tr><td><b>${esc(e.to)}</b> → ${esc(e.from)}</td>` +
+      `<td class="n ${cls(e.forward_syn)}">${e.forward_syn ? s(e.forward_syn) : "—"}</td>` +
+      `<td><b>${esc(e.from)}</b> → ${esc(e.to)}</td>` +
+      `<td class="n ${cls(e.syn)}">${s(e.syn)}</td>` +
+      `<td>${e.forward_syn === 0 ? "one-way"
+        : (e.syn > 0) !== (e.forward_syn > 0) ? "negative feedback" : "positive feedback"}</td>`
+      + `</tr>`;
+  }).join("");
+  const tb = document.getElementById("loop-tb");
+  if (tb) tb.innerHTML = rows;
+})();
