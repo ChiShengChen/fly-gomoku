@@ -11,6 +11,12 @@ see whether the real wiring did anything. Here it did not — the shuffled copy 
 both brains lighting up beside the board. The page is self-contained (about 3.5 MB, with the
 recorded simulation embedded) and fetches nothing but its fonts.
 
+![Two flies at a gomoku board, each with a cloud of its own neurons lighting up behind it](docs/img/head_to_head.png)
+
+*Game 1 of the head-to-head, move 22 of 26. The real connectome (orange, far side) fired 693 of
+its recorded neurons on its last move; the shuffled copy (blue, near side) fired 3,096. The
+shuffled copy went on to win.*
+
 ## Result
 
 One run, FlyWire v783, 139,255 neurons, seed 1 (2026-09-13).
@@ -43,6 +49,11 @@ One run, FlyWire v783, 139,255 neurons, seed 1 (2026-09-13).
   deletion). What is left is the model's own gain: the photoreceptors move L1's membrane by about
   one millivolt.
 
+![Receptive-field map of the readout cells on the board, and the comparison table for both brains](docs/img/wiring.png)
+
+*Left: each dot is one LC4 or LPLC2 cell at the retinal position its wiring gives it; the 51
+squares no cell covers are crossed out. Right: the same boards shown to both brains.*
+
 [`docs/NOTES.md`](docs/NOTES.md) is the lab notebook behind these numbers, mistakes included.
 
 ## How a move is made
@@ -59,6 +70,11 @@ Nothing is trained. There is no reward, no policy and no search.
    wiring, not assumed from where the cell body sits.
 5. The free square with the most spikes is the move. If no readout cell fired, the move is random
    and is counted as such.
+
+![Two 9×9 boards side by side, mid-game, with red shading where the lobula is most active](docs/img/vs_random.png)
+
+*Both brains (orange stones) against the same random opponent (grey), 12 moves in. Red shading is
+the lobula's activity over each square — the next move goes to the brightest free one.*
 
 The shuffled copy keeps every neuron's number of inputs and outputs and rewires who connects to
 whom. A plain brightest-region rule, with no neurons at all, is shown the same boards as a second
